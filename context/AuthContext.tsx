@@ -37,13 +37,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     
-    // Extract using the actual API key rather than the documented one
     const actualToken = data.access_token || data.token;
+    const refreshToken = data.refresh_token;
     
     if (!actualToken) throw new Error("No access token returned from server");
 
     localStorage.setItem('ivy_token', actualToken);
+    if (refreshToken) localStorage.setItem('ivy_refresh_token', refreshToken);
     localStorage.setItem('ivy_user', JSON.stringify(data.user));
+    
     setUser(data.user);
     router.push('/listings');
   };
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     fetchApi('/auth/logout', { method: 'POST' }).catch(console.error);
     localStorage.removeItem('ivy_token');
+    localStorage.removeItem('ivy_refresh_token');
     localStorage.removeItem('ivy_user');
     setUser(null);
     router.push('/');

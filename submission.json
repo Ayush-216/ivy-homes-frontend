@@ -81,6 +81,15 @@
 			"how_found": "Network request failed on dashboard mount",
 			"impact": "Breaks the insights dashboard completely",
 			"evidence": []
+		},
+		{
+			"endpoint": "/auth/refresh",
+			"category": "auth",
+			"documented": "Tokens valid for 24h. Explicitly states 'There is no refresh flow.'",
+			"actual": "Tokens expire quickly. API requires calling POST /auth/refresh with a refresh_token.",
+			"how_found": "Listings API returned 401 detailing the exact POST /auth/refresh endpoint.",
+			"impact": "Sessions drop unexpectedly; forces developers to implement an undocumented token refresh interceptor.",
+			"evidence": []
 		}
 	]
 }
