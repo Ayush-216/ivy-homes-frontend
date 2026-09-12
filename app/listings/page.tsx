@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
 import Link from 'next/link';
-import { Search, MapPin, Bed, IndianRupee, Loader2 } from 'lucide-react';
+import { Search, MapPin, Bed, IndianRupee, Loader2, SlidersHorizontal } from 'lucide-react';
 
 export default function ListingsPage() {
   const [summary, setSummary] = useState<any>({ total_listings: 3500, median_price: 11200000, median_price_per_sqft: 26670 });
@@ -18,8 +18,10 @@ export default function ListingsPage() {
   const [searchName, setSearchName] = useState('');
   const [filterLocality, setFilterLocality] = useState('');
   const [filterBhk, setFilterBhk] = useState('');
+  const [minPrice, setMinPrice] = useState<number>(0);
+  const [maxPrice, setMaxPrice] = useState<number>(50000000); // 5 Cr Default Max
 
-  // 1. Restore State on Mount (Fixes the "Back button" re-load issue)
+  // Restore State on Mount
   useEffect(() => {
     fetchApi('/v1/analytics/summary').then(setSummary).catch(() => {});
     
@@ -29,23 +31,25 @@ export default function ListingsPage() {
       setListings(parsed.listings);
       setPage(parsed.page);
       setTotalPages(parsed.totalPages);
-      setSearchName(parsed.searchName);
-      setFilterLocality(parsed.filterLocality);
-      setFilterBhk(parsed.filterBhk);
+      setSearchName(parsed.searchName || '');
+      setFilterLocality(parsed.filterLocality || '');
+      setFilterBhk(parsed.filterBhk || '');
+      setMinPrice(parsed.minPrice || 0);
+      setMaxPrice(parsed.maxPrice || 50000000);
       setInitialLoad(false);
     } else {
       loadListings(1);
     }
   }, []);
 
-  // 2. Save State on Change
+  // Save State on Change
   useEffect(() => {
     if (!initialLoad) {
       sessionStorage.setItem('nexus_feed_state', JSON.stringify({
-        listings, page, totalPages, searchName, filterLocality, filterBhk
+        listings, page, totalPages, searchName, filterLocality, filterBhk, minPrice, maxPrice
       }));
     }
-  }, [listings, page, totalPages, searchName, filterLocality, filterBhk, initialLoad]);
+  }, [listings, page, totalPages, searchName, filterLocality, filterBhk, minPrice, maxPrice, initialLoad]);
 
   const loadListings = async (targetPage: number) => {
     setLoadingListings(true);
@@ -56,8 +60,6 @@ export default function ListingsPage() {
       
       setListings(newResults);
       setPage(targetPage);
-      
-      // Calculate total pages based on our offline discovery (3500 total / 50 per page)
       setTotalPages(Math.ceil(3500 / 50)); 
     } catch (err) {
       console.error("Failed to load listings", err);
@@ -67,34 +69,37 @@ export default function ListingsPage() {
     }
   };
 
+  // SaaS Pagination Logic
+  const getPaginationGroup = () => {
+    let pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages = [1, 2, 3, 4, '...', totalPages - 1, totalPages];
+      } else if (page >= totalPages - 2) {
+        pages = [1, 2, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+      } else {
+        pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+      }
+    }
+    return pages;
+  };
+
   // Frontend Filtering
   const displayedListings = listings.filter(l => {
     const nameMatch = (l.apartment_name || l.property_type || '').toLowerCase();
     if (searchName && !nameMatch.includes(searchName.toLowerCase())) return false;
     if (filterLocality && !l.locality?.toLowerCase().includes(filterLocality.toLowerCase())) return false;
     if (filterBhk && l.bedroom?.toString() !== filterBhk) return false;
+    if (l.price < minPrice || l.price > maxPrice) return false;
     return true;
   });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
-      {/* Dashboard Widgets */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { label: "Active Listings", val: summary.total_listings },
-          { label: "Median Price", val: `₹${(summary.median_price || 0).toLocaleString()}` },
-          { label: "Avg Price / SqFt", val: `₹${summary.median_price_per_sqft}` }
-        ].map((stat, i) => (
-          <div key={i} className="bg-gray-900/40 p-6 rounded-2xl border border-gray-800 hover:border-cyan-500/30 transition-all shadow-lg hover:shadow-cyan-500/10">
-            <h3 className="text-gray-500 text-xs font-bold tracking-widest uppercase mb-2">{stat.label}</h3>
-            <p className="text-3xl font-extrabold text-white">{stat.val}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* Control Panel (Filters) */}
       <section className="bg-gray-900/60 p-6 rounded-2xl border border-gray-800 shadow-xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 text-gray-500 w-5 h-5" />
             <input 
@@ -130,9 +135,61 @@ export default function ListingsPage() {
             </select>
           </div>
         </div>
+
+        {/* Dual Slider & Price Inputs */}
+        <div className="border-t border-gray-800 pt-6">
+          <div className="flex items-center gap-2 mb-4 text-sm font-bold text-gray-400 uppercase tracking-wider">
+            <SlidersHorizontal size={16} /> Price Range
+          </div>
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="flex-1 w-full relative h-2 bg-gray-800 rounded-full">
+               {/* Custom Dual Range Slider overlay */}
+               <input 
+                 type="range" 
+                 min="0" max="100000000" step="100000"
+                 value={minPrice}
+                 onChange={(e) => setMinPrice(Math.min(Number(e.target.value), maxPrice - 100000))}
+                 className="absolute w-full top-0 appearance-none bg-transparent pointer-events-auto h-2 z-20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
+               />
+               <input 
+                 type="range" 
+                 min="0" max="100000000" step="100000"
+                 value={maxPrice}
+                 onChange={(e) => setMaxPrice(Math.max(Number(e.target.value), minPrice + 100000))}
+                 className="absolute w-full top-0 appearance-none bg-transparent pointer-events-auto h-2 z-30 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
+               />
+               {/* Slider Track Highlight */}
+               <div 
+                 className="absolute h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full z-10"
+                 style={{ left: `${(minPrice / 100000000) * 100}%`, right: `${100 - (maxPrice / 100000000) * 100}%` }}
+               />
+            </div>
+            
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
+                <input 
+                  type="number" 
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(Number(e.target.value))}
+                  className="w-32 bg-gray-950 border border-gray-700 text-white pl-8 pr-2 py-2 rounded-lg text-sm focus:border-cyan-500 outline-none"
+                />
+              </div>
+              <span className="text-gray-600">to</span>
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
+                <input 
+                  type="number" 
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(Number(e.target.value))}
+                  className="w-32 bg-gray-950 border border-gray-700 text-white pl-8 pr-2 py-2 rounded-lg text-sm focus:border-cyan-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* Data Grid */}
       <section className="relative min-h-[400px]">
         {loadingListings ? (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-950/50 backdrop-blur-sm z-10 rounded-2xl">
@@ -143,7 +200,7 @@ export default function ListingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayedListings.map(listing => (
             <Link href={`/listings/${listing.listing_id}`} key={listing.listing_id}>
-              <div className="bg-gray-900/40 p-6 rounded-2xl border border-gray-800 hover:border-cyan-500/50 hover:bg-gray-900 transition-all cursor-pointer group h-full flex flex-col shadow-lg hover:shadow-[0_0_20px_rgba(6,182,212,0.15)]">
+              <div className="bg-gray-900/40 p-6 rounded-2xl border border-gray-800 hover:border-cyan-500/50 hover:bg-gray-900 transition-all cursor-pointer group h-full flex flex-col shadow-lg">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-lg font-bold text-gray-100 group-hover:text-cyan-400 line-clamp-1">
                     {listing.apartment_name || listing.property_type}
@@ -171,32 +228,53 @@ export default function ListingsPage() {
               </div>
             </Link>
           ))}
-        </div>
-
-        {/* Numbered Pagination */}
-        <div className="mt-12 flex justify-center items-center gap-2">
-          <button 
-            disabled={page === 1}
-            onClick={() => loadListings(page - 1)}
-            className="px-4 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-cyan-500 disabled:opacity-30 disabled:pointer-events-none transition-all"
-          >
-            Prev
-          </button>
           
-          <div className="flex items-center gap-1 px-4 text-sm font-medium">
-            <span className="text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-md border border-cyan-500/20">{page}</span>
-            <span className="text-gray-600 mx-2">/</span>
-            <span className="text-gray-400">{totalPages}</span>
-          </div>
-
-          <button 
-            disabled={page === totalPages}
-            onClick={() => loadListings(page + 1)}
-            className="px-4 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-cyan-500 disabled:opacity-30 disabled:pointer-events-none transition-all"
-          >
-            Next
-          </button>
+          {displayedListings.length === 0 && !loadingListings && (
+            <div className="col-span-full py-20 text-center text-gray-500 border border-dashed border-gray-800 rounded-2xl">
+              No properties match your exact filters.
+            </div>
+          )}
         </div>
+
+        {/* Professional SaaS Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-12 flex justify-center items-center gap-2">
+            <button 
+              disabled={page === 1}
+              onClick={() => loadListings(page - 1)}
+              className="px-4 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-cyan-500 disabled:opacity-30 transition-all"
+            >
+              Prev
+            </button>
+            
+            <div className="flex items-center gap-1">
+              {getPaginationGroup().map((item, index) => (
+                <button
+                  key={index}
+                  disabled={item === '...'}
+                  onClick={() => typeof item === 'number' && loadListings(item)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center font-medium transition-all ${
+                    item === page 
+                      ? 'bg-cyan-500 text-gray-950 shadow-[0_0_15px_rgba(6,182,212,0.4)]' 
+                      : item === '...' 
+                        ? 'text-gray-600 cursor-default' 
+                        : 'bg-gray-900 border border-gray-800 text-gray-400 hover:border-cyan-500 hover:text-white'
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            <button 
+              disabled={page === totalPages}
+              onClick={() => loadListings(page + 1)}
+              className="px-4 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-cyan-500 disabled:opacity-30 transition-all"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );
