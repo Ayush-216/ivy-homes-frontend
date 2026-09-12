@@ -6,12 +6,13 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'X-API-Key': API_KEY!, // Header added here
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 
   const url = new URL(`${BASE_URL}${endpoint}`);
-  url.searchParams.append('api_key', API_KEY!);
+  // Removed the url.searchParams.append line from here
 
   const response = await fetch(url.toString(), { ...options, headers });
   

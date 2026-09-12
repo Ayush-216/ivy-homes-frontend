@@ -37,7 +37,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     
-    localStorage.setItem('ivy_token', data.token);
+    // Extract using the actual API key rather than the documented one
+    const actualToken = data.access_token || data.token;
+    
+    if (!actualToken) throw new Error("No access token returned from server");
+
+    localStorage.setItem('ivy_token', actualToken);
     localStorage.setItem('ivy_user', JSON.stringify(data.user));
     setUser(data.user);
     router.push('/listings');
