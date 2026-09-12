@@ -1,0 +1,63 @@
+{
+  "api_key": "IVY26-3F9AD1C6793C",
+  "candidate": {
+    "name": "Ayush Pandey",
+    "email": "ayush.20233331@mnnit.ac.in",
+    "repo_url": "https://github.com/yourusername/ivy-homes-frontend",
+    "demo_url": "https://your-vercel-deployment-url.vercel.app"
+  },
+  "answers": {
+    "total_listing_records": 3500,
+    "unique_properties": 3500,
+    "active_listings": 2792,
+    "corrupt_listing_ids": [
+      "100-6000323", "100-6000338", "100-6001968", "DWE-6000010", 
+      "DWE-6001015", "DWE-6002846", "MAG-6000453", "MAG-6000527", 
+      "MAG-6001135", "MAG-6002834", "SQU-6001477", "ZER-6000468"
+    ],
+    "total_monthly_rent": 4556900,
+    "avg_price_per_sqft_2bhk": 26669.96,
+    "costliest_project": { "project_id": "P60090", "price_max_inr": 989000000 },
+    "listings_last_7_days": 129,
+    "fake_listing_ids": [],
+    "projects_with_wrong_listing_count": 295
+  },
+  "findings": [
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "returns 'token' in response payload",
+      "actual": "returns 'access_token' instead",
+      "how_found": "script failed to authenticate on subsequent requests due to undefined token",
+      "impact": "blocks all authenticated requests if strictly following docs",
+      "evidence": []
+    },
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "pass api_key as a query parameter (e.g., ?api_key=...)",
+      "actual": "requires X-API-Key in the request headers",
+      "how_found": "API returned 401 detailing the expected header",
+      "impact": "authentication completely fails if relying on query parameters",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "uses 'page' and 'limit' parameters, max limit 200",
+      "actual": "uses 'offset' and 'limit', caps limit at 50 per response",
+      "how_found": "sending page=1 looped the exact same 50 records endlessly until switching to offset",
+      "impact": "causes infinite loops and incomplete data sweeps",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "price_max is an integer representing Indian rupees",
+      "actual": "price_max represents Crores (e.g., 98.9)",
+      "how_found": "calculated costliest project returned 98.9, which is impossible as an INR integer",
+      "impact": "massive financial miscalculation on the frontend",
+      "evidence": ["P60090"]
+    }
+  ]
+}
