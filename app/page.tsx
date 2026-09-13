@@ -1,12 +1,22 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('demo1@ivy.homes');
-  const [password, setPassword] = useState('cde483bd0b');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
+
+  const { user, loading, login } = useAuth();
+  const router = useRouter();
+
+  // Add this block to auto-redirect logged-in users
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/listings');
+    }
+  }, [user, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

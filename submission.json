@@ -90,6 +90,15 @@
 			"how_found": "Listings API returned 401 detailing the exact POST /auth/refresh endpoint.",
 			"impact": "Sessions drop unexpectedly; forces developers to implement an undocumented token refresh interceptor.",
 			"evidence": []
+		},
+		{
+			"endpoint": "/v1/favourites",
+			"category": "missing_endpoint",
+			"documented": "Endpoints exist at /v1/favourites",
+			"actual": "Returns 404 Not Found. The true endpoint uses American spelling: /v1/favorites",
+			"how_found": "POST request to /v1/favourites returned a 404 during the save toggle flow.",
+			"impact": "Breaks all saving/bookmarking functionality until developers guess the correct regional spelling.",
+			"evidence": []
 		}
 	]
 }

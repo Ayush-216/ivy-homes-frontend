@@ -10,27 +10,71 @@ export default function ListingDetail() {
   const [listing, setListing] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  
+  // State to hold whichever endpoint actually works
+  const [workingEndpoint, setWorkingEndpoint] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchApi(`/v1/listings/${params.id}`).then(setListing).catch(console.error).finally(() => setLoading(false));
-    fetchApi('/v1/favourites').then(data => {
-      setSaved((data.results || []).some((fav: any) => fav.listing_id === params.id));
-    }).catch(() => {});
+    // 1. Fetch listing details
+    fetchApi(`/v1/listings/${params.id}`)
+      .then(setListing)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+
+    // 2. Automate Hypothesis Testing (The Prober)
+    const probeForEndpoint = async () => {
+      const hypotheses = [
+        '/v1/saved', 
+        '/v1/saved_listings', 
+        '/v1/bookmarks', 
+        '/v1/me/favourites',
+        '/v1/users/me/favourites'
+      ];
+
+      for (const path of hypotheses) {
+        try {
+          // If this throws 404, the catch block swallows it and loops to the next
+          const data = await fetchApi(path);
+          
+          console.log(`%c✅ DISCOVERED HIDDEN ENDPOINT: ${path}`, 'color: #4ade80; font-size: 16px; font-weight: bold;');
+          
+          setWorkingEndpoint(path);
+          setSaved((data.results || data.data || []).some((fav: any) => fav.listing_id === params.id || fav.id === params.id));
+          return; // Stop probing once we find it!
+        } catch (e) {
+          console.log(`❌ Hypothesis failed: ${path}`);
+        }
+      }
+      console.warn("All endpoint hypotheses failed. The lie is deeper.");
+    };
+
+    probeForEndpoint();
   }, [params.id]);
 
   const toggleSave = async () => {
+    if (!workingEndpoint) {
+      alert("Still searching for the correct API endpoint...");
+      return;
+    }
+
     try {
       if (saved) {
-        await fetchApi(`/v1/favourites/${params.id}`, { method: 'DELETE' });
+        await fetchApi(`${workingEndpoint}/${params.id}`, { method: 'DELETE' });
         setSaved(false);
       } else {
-        await fetchApi('/v1/favourites', { method: 'POST', body: JSON.stringify({ id: params.id }) });
+        // We will try sending BOTH 'id' and 'listing_id' just in case the payload is also documented wrong
+        await fetchApi(workingEndpoint, { 
+          method: 'POST', 
+          body: JSON.stringify({ id: params.id, listing_id: params.id }) 
+        });
         setSaved(true);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error("Save toggle failed on discovered endpoint", err); 
+    }
   };
 
-  if (loading) return null; // Let loading.tsx handle the UI
+  if (loading) return null;
   if (!listing) return <div className="p-8 text-red-500">Record not found.</div>;
 
   return (
@@ -44,8 +88,12 @@ export default function ListingDetail() {
           {listing.is_verified ? <><CheckCircle size={14}/> Verified Record</> : <><ShieldAlert size={14}/> Unverified Record</>}
         </div>
 
-        <button onClick={toggleSave} className={`absolute top-10 right-10 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg ${saved ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500 shadow-cyan-500/20' : 'bg-gray-900 text-gray-400 border border-gray-700 hover:border-cyan-500 hover:text-white'}`}>
-          {saved ? '★ Bookmarked' : '☆ Bookmark'}
+        <button 
+          onClick={toggleSave} 
+          disabled={!workingEndpoint}
+          className={`absolute top-10 right-10 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg ${saved ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500 shadow-cyan-500/20' : 'bg-gray-900 text-gray-400 border border-gray-700 hover:border-cyan-500 hover:text-white disabled:opacity-50'}`}
+        >
+          {!workingEndpoint ? 'Probing API...' : saved ? '★ Bookmarked' : '☆ Bookmark'}
         </button>
 
         <div className="mt-8 mb-10">
